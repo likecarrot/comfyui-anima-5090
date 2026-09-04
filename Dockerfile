@@ -2,20 +2,20 @@ FROM nvidia/cuda:13.0.2-cudnn-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
-ENV PIP_NO_CACHE_DIR=1
 
 WORKDIR /workspace
+
 
 # ============================================================
 # 系统基础依赖
 # ============================================================
 
 RUN apt-get update && apt-get install -y \
-    git \
     python3 \
     python3-pip \
     python3-venv \
     python3-dev \
+    git \
     wget \
     curl \
     ca-certificates \
@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y \
 
 
 # ============================================================
-# AutoDL SSH 基础配置
+# AutoDL SSH
 # ============================================================
 
 RUN mkdir -p /var/run/sshd && \
@@ -40,7 +40,7 @@ RUN mkdir -p /var/run/sshd && \
 
 
 # ============================================================
-# Python 虚拟环境
+# Python Virtual Environment
 # ============================================================
 
 RUN python3 -m venv /opt/venv
@@ -49,25 +49,16 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 
 # ============================================================
-# 升级 Python 基础工具
+# Python 基础工具
 # ============================================================
 
-RUN pip install --upgrade \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
+    --upgrade \
     pip \
     setuptools \
     wheel \
     -i https://mirrors.aliyun.com/pypi/simple
-
-
-# ============================================================
-# 下载最新版 ComfyUI
-# ============================================================
-
-RUN git clone \
-    https://github.com/Comfy-Org/ComfyUI.git \
-    /workspace/ComfyUI
-
-WORKDIR /workspace/ComfyUI
 
 
 # ============================================================
@@ -77,7 +68,8 @@ WORKDIR /workspace/ComfyUI
 # CUDA 13.0
 # ============================================================
 
-RUN pip install \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
     torch \
     torchvision \
     torchaudio \
@@ -85,10 +77,22 @@ RUN pip install \
 
 
 # ============================================================
+# 复制固定版本 ComfyUI
+#
+# ComfyUI 已经直接放在 GitHub 仓库中
+# ============================================================
+
+COPY ComfyUI /workspace/ComfyUI
+
+WORKDIR /workspace/ComfyUI
+
+
+# ============================================================
 # ComfyUI Python dependencies
 # ============================================================
 
-RUN pip install \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
     -r requirements.txt \
     -i https://mirrors.aliyun.com/pypi/simple
 
@@ -97,7 +101,8 @@ RUN pip install \
 # JupyterLab
 # ============================================================
 
-RUN pip install \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
     "jupyterlab>=4.0" \
     ipywidgets \
     matplotlib \
@@ -128,7 +133,7 @@ RUN mkdir -p /workspace/notebooks
 
 
 # ============================================================
-# 复制启动脚本
+# 启动脚本
 # ============================================================
 
 COPY start.sh /workspace/start.sh
@@ -138,9 +143,6 @@ RUN chmod +x /workspace/start.sh
 
 # ============================================================
 # 端口
-#
-# 8188  -> ComfyUI
-# 8888  -> JupyterLab
 # ============================================================
 
 EXPOSE 8188
@@ -148,13 +150,8 @@ EXPOSE 8888
 
 
 # ============================================================
-# 注意：
-#
 # 不设置 ENTRYPOINT
 # 不设置 CMD
 #
-# AutoDL 可以根据自己的启动机制执行命令。
-# 如果需要手动启动：
-#
-# /workspace/start.sh
+# AutoDL 启动时会传入自己的 CMD
 # ============================================================
