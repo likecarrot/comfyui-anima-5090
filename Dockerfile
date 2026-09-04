@@ -50,6 +50,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # ============================================================
 # Python 基础工具
+#
+# 使用 BuildKit pip cache
+# 可以让 ACR 后续构建复用已经下载的 Python wheel
 # ============================================================
 
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -66,6 +69,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 #
 # RTX 5090 / Blackwell
 # CUDA 13.0
+#
+# 单独安装 PyTorch，避免被 ComfyUI requirements 覆盖
 # ============================================================
 
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -77,18 +82,30 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 
 # ============================================================
-# 复制固定版本 ComfyUI
-#
-# ComfyUI 已经直接放在 GitHub 仓库中
+# 创建 ComfyUI 目录
 # ============================================================
 
-COPY ComfyUI /workspace/ComfyUI
+RUN mkdir -p /workspace/ComfyUI
 
 WORKDIR /workspace/ComfyUI
 
 
 # ============================================================
-# ComfyUI Python dependencies
+# 第一阶段：只复制 requirements.txt
+#
+# 重要优化：
+#
+# 如果以后只修改 ComfyUI 源码，而 requirements.txt 没变化，
+# Docker 可以直接复用下面这一层，不需要重新 pip install。
+# ============================================================
+
+COPY ComfyUI/requirements.txt /workspace/ComfyUI/requirements.txt
+
+
+# ============================================================
+# 安装 ComfyUI Python dependencies
+#
+# 使用 BuildKit pip cache
 # ============================================================
 
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -108,6 +125,19 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     matplotlib \
     jupyterlab_language_pack_zh_CN \
     -i https://mirrors.aliyun.com/pypi/simple
+
+
+# ============================================================
+# 第二阶段：复制完整 ComfyUI
+#
+# 注意：
+# 这一层放在 Python dependencies 后面。
+#
+# 修改 ComfyUI 源码时，不会导致上面的 pip install
+# 重新执行。
+# ============================================================
+
+COPY ComfyUI /workspace/ComfyUI
 
 
 # ============================================================
@@ -143,6 +173,9 @@ RUN chmod +x /workspace/start.sh
 
 # ============================================================
 # 端口
+#
+# 8188 -> ComfyUI
+# 8888 -> JupyterLab
 # ============================================================
 
 EXPOSE 8188
@@ -153,5 +186,11 @@ EXPOSE 8888
 # 不设置 ENTRYPOINT
 # 不设置 CMD
 #
-# AutoDL 启动时会传入自己的 CMD
+# AutoDL 启动时传入自己的 CMD
+#
+# 手动启动 ComfyUI：
+# /workspace/start.sh
+#
+# 手动启动 JupyterLab：
+# jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser
 # ============================================================
